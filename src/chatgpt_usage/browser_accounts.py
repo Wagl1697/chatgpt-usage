@@ -55,7 +55,7 @@ def _schema_directories():
     if configured:
         values.append(Path(configured).expanduser())
     values.append(Path.home() / ".local/share/gnome-shell/extensions/chatgpt-usage@wlopez.local/schemas")
-    values.append(Path(__file__).resolve().parent / "gnome-extension" / "schemas")
+    values.append(Path(__file__).resolve().parents[2] / "gnome-extension" / "schemas")
     return values
 
 

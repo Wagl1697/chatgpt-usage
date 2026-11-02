@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 STATE = Path(os.environ.get("CHATGPT_USAGE_STATE_DIR", ROOT)) / "uso.json"
 HOST = os.environ.get("CHATGPT_USAGE_WEB_HOST", "127.0.0.1")
 PORT = int(os.environ.get("CHATGPT_USAGE_WEB_PORT", "8088"))

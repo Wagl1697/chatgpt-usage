@@ -3,10 +3,13 @@
 
 import argparse
 import json
+from pathlib import Path
 import sys
 
-import browser_accounts
-import monitor
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from chatgpt_usage import browser_accounts, monitor
 
 
 def scan(families):

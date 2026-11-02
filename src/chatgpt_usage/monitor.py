@@ -17,9 +17,9 @@ from urllib.parse import urlsplit
 
 from curl_cffi import requests
 
-import browser_accounts
+from chatgpt_usage import browser_accounts
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 ORIGIN = "https://chatgpt.com"
 OPENCODE_USAGE_INTERVAL = 10
 CHATGPT_USAGE_INTERVAL = 10

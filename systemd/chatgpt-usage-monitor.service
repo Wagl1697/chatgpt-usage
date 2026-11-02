@@ -1,0 +1,16 @@
+[Unit]
+Description=Monitor local del uso del plan de ChatGPT
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/chatgpt-usage
+Environment=PYTHONPATH=%h/chatgpt-usage/src
+ExecStart=%h/chatgpt-usage/.venv/bin/python -m chatgpt_usage.monitor
+Restart=on-failure
+RestartSec=15
+UMask=0077
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

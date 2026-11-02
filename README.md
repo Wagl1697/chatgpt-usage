@@ -62,7 +62,6 @@ absolutas de esta máquina y compila el esquema. Después:
 ```sh
 systemctl --user restart chatgpt-usage-monitor.service
 ```
-
 La extensión se carga al cerrar sesión y volver a entrar en GNOME.
 
 ## Uso
@@ -83,7 +82,7 @@ Escucha en `127.0.0.1`; para verlo desde otro dispositivo se puede publicar en
 la tailnet con Tailscale Serve:
 
 ```sh
-python3 web.py
+PYTHONPATH=src .venv/bin/python -m chatgpt_usage.web
 tailscale serve --bg --https=8445 http://127.0.0.1:8088
 ```
 
@@ -111,7 +110,7 @@ No uses Tailscale Funnel para exponerlo a Internet.
 ## Pruebas
 
 ```sh
-.venv/bin/python -m unittest -v test_monitor.py test_accounts.py
+PYTHONPATH=src .venv/bin/python -m unittest -v test_monitor.py test_accounts.py
 ```
 
 Las pruebas usan cuentas ficticias y no necesitan red.

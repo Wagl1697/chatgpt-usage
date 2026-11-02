@@ -52,7 +52,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--destination", type=Path, default=DEFAULT_DESTINATION)
     parser.add_argument("--state-file", type=Path, default=ROOT / "uso.json")
-    parser.add_argument("--scan-script", type=Path, default=ROOT / "scan_accounts.py")
+    parser.add_argument("--scan-script", type=Path, default=ROOT / "src/chatgpt_usage/scan_accounts.py")
     parser.add_argument("--scan-python", type=Path, default=DEFAULT_PYTHON)
     args = parser.parse_args()
     install(

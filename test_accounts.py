@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-import browser_accounts
-import monitor
+from chatgpt_usage import browser_accounts
+from chatgpt_usage import monitor
 
 KEY = b"0123456789abcdef"
 

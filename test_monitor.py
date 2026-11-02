@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-import monitor
+from chatgpt_usage import monitor
 
 
 class MonitorTests(unittest.TestCase):
@@ -55,17 +55,17 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(monitor.retry_seconds("180"), 180)
         self.assertEqual(monitor.retry_seconds("5"), 60)
         self.assertEqual(monitor.retry_seconds("invalid"), 60)
-        with patch("monitor.time.time", return_value=0):
+        with patch("chatgpt_usage.monitor.time.time", return_value=0):
             self.assertEqual(monitor.retry_seconds("Thu, 01 Jan 1970 00:03:00 GMT"), 180)
 
     def test_token_refresh_schedule(self):
         payload = base64.urlsafe_b64encode(json.dumps({"exp": 2000}).encode()).decode().rstrip("=")
-        with patch("monitor.time.time", return_value=1000):
+        with patch("chatgpt_usage.monitor.time.time", return_value=1000):
             self.assertEqual(monitor.token_lifetime("x." + payload + ".x"), 600)
         self.assertEqual(monitor.token_lifetime("opaque-token"), 300)
 
     def make_client(self):
-        with patch("monitor.requests.Session") as factory:
+        with patch("chatgpt_usage.monitor.requests.Session") as factory:
             client = monitor.UsageClient()
         client.token = "test-token"
         client.refresh_at = float("inf")

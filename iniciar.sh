@@ -1,3 +1,3 @@
 #!/bin/sh
 cd "$(dirname "$0")" || exit 1
-exec .venv/bin/python monitor.py "$@"
+PYTHONPATH="$PWD/src" exec .venv/bin/python -m chatgpt_usage.monitor "$@"

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chatgpt-usage"
+version = "0.2.0"
+description = "Monitor local de uso de ChatGPT y OpenCode Go para GNOME"
+requires-python = ">=3.10"
+dependencies = [
+    "curl_cffi==0.16.3",
+    "cryptography>=41",
+]
+
+[project.scripts]
+chatgpt-usage-monitor = "chatgpt_usage.monitor:main"
+chatgpt-usage-scan = "chatgpt_usage.scan_accounts:main"
+chatgpt-usage-web = "chatgpt_usage.web:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["chatgpt_usage"]
