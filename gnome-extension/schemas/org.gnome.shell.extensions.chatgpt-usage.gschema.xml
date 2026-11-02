@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.chatgpt-usage" path="/org/gnome/shell/extensions/chatgpt-usage/">
+    <key name="account-display-names" type="s">
+      <default>'{}'</default>
+      <summary>Display names for ChatGPT accounts</summary>
+    </key>
+    <key name="carousel-order" type="s">
+      <default>'[]'</default>
+      <summary>Carousel order of accounts and providers</summary>
+    </key>
+    <key name="carousel-interval" type="i">
+      <default>10</default>
+      <summary>Seconds between carousel items</summary>
+    </key>
+    <key name="show-hover-summary" type="b">
+      <default>true</default>
+      <summary>Show summary on hover</summary>
+    </key>
+    <key name="tracked-accounts" type="s">
+      <default>'[]'</default>
+      <summary>Enabled ChatGPT accounts and their browser sources</summary>
+    </key>
+  </schema>
+</schemalist>

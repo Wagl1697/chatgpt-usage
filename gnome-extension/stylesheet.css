@@ -1,0 +1,16 @@
+.chatgpt-usage-tooltip {
+    background-color: rgba(28, 28, 28, 0.97);
+    color: #f6f5f4;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 5px;
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.chatgpt-usage-meter {
+    spacing: 1px;
+}
+
+.chatgpt-usage-menu-scroll {
+    padding: 2px;
+}
