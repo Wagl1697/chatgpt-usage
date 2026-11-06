@@ -200,11 +200,11 @@ export default class ChatGPTPlanMonitor extends Extension {
         this._menuScroll = new St.ScrollView({
             style_class: 'chatgpt-usage-menu-scroll',
             hscrollbar_policy: St.PolicyType.NEVER,
-            vscrollbar_policy: St.PolicyType.AUTOMATIC,
+            vscrollbar_policy: St.PolicyType.ALWAYS,
             x_expand: true,
             y_expand: true,
         });
-        this._menuScroll.set_style(`max-height: ${Math.floor(monitor.height * 0.68)}px; max-width: ${Math.floor(monitor.width * 0.52)}px;`);
+        this._menuScroll.set_style(`max-height: ${Math.floor(monitor.height * 0.82)}px; max-width: ${Math.floor(monitor.width * 0.58)}px;`);
         const menuBin = this._button.menu._boxPointer.bin;
         menuBin.set_child(null);
         this._menuScroll.set_child(this._button.menu.box);
@@ -457,19 +457,20 @@ export default class ChatGPTPlanMonitor extends Extension {
             let row = rows.resetItems.get(credit.id);
             if (!row) {
                 const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-                item.set_style('padding: 3px 8px;');
+                item.set_style('padding: 1px 6px;');
                 const box = new St.BoxLayout({x_expand: true, y_expand: false});
                 const labels = new St.BoxLayout({vertical: true, x_expand: true, y_expand: false});
                 const title = new St.Label({text: '', x_align: Clutter.ActorAlign.START, x_expand: true});
                 const expiry = new St.Label({text: '', x_align: Clutter.ActorAlign.START, x_expand: true, style_class: 'dim-label'});
                 const button = new St.Button({
-                    label: 'Usar restablecimiento',
+                    label: 'Usar',
                     can_focus: true,
                     reactive: true,
                     track_hover: true,
                     style_class: 'button',
                     x_align: Clutter.ActorAlign.END,
                 });
+                button.set_style('padding: 1px 8px; min-height: 20px; max-height: 22px; font-size: 0.82em; border-radius: 999px;');
                 labels.add_child(title);
                 labels.add_child(expiry);
                 box.add_child(labels);
@@ -488,9 +489,9 @@ export default class ChatGPTPlanMonitor extends Extension {
             if (row.loading)
                 row.button.set_label('Aplicando…');
             else if (!credit.is_supported_by_plan)
-                row.button.set_label('No disponible para este plan');
+                row.button.set_label('No disponible');
             else
-                row.button.set_label(row.confirmed ? 'Confirmar' : 'Usar restablecimiento');
+                row.button.set_label(row.confirmed ? 'Confirmar' : 'Usar');
             row.button.set_sensitive(account.fresh && credit.is_supported_by_plan && !row.loading);
         }
     }
@@ -549,7 +550,7 @@ export default class ChatGPTPlanMonitor extends Extension {
             row.loading = false;
             row.confirmed = false;
             if (!row.destroyed) {
-                row.button.set_label(row.credit.is_supported_by_plan ? 'Usar restablecimiento' : 'No disponible para este plan');
+                row.button.set_label(row.credit.is_supported_by_plan ? 'Usar' : 'No disponible');
                 row.button.set_sensitive(row.fresh && row.credit.is_supported_by_plan);
             }
             Main.notify('Restablecimiento de ChatGPT', message);
