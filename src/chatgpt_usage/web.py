@@ -389,6 +389,23 @@ def _read_report():
         return {}
 
 
+def _public_report():
+    """Omit reset identifiers from the read-only web endpoint."""
+    report = _read_report()
+    if not isinstance(report, dict):
+        return {}
+    public = dict(report)
+    accounts = report.get("chatgpt_accounts")
+    if isinstance(accounts, list):
+        public["chatgpt_accounts"] = [
+            {key: value for key, value in account.items()
+             if not key.startswith("reset_credits")}
+            if isinstance(account, dict) else account
+            for account in accounts
+        ]
+    return public
+
+
 def _display_names():
     now = time.time()
     if now - _names_cache["at"] < 30:
@@ -530,11 +547,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/summary.txt":
             self._send(200, build_summary()["text"].encode("utf-8"), "text/plain; charset=utf-8")
         elif path == "/api/uso.json":
-            try:
-                body = STATE.read_bytes()
-                json.loads(body)
-            except (OSError, ValueError):
-                body = b"{}"
+            body = json.dumps(_public_report(), ensure_ascii=False).encode("utf-8")
             self._send(200, body, "application/json; charset=utf-8")
         elif path == "/healthz":
             self._send(200, b"ok\n", "text/plain; charset=utf-8")

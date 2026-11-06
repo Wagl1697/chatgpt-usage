@@ -14,12 +14,13 @@ DEFAULT_DESTINATION = Path.home() / ".local/share/gnome-shell/extensions" / UUID
 DEFAULT_PYTHON = ROOT / ".venv/bin/python"
 
 
-def render_metadata(destination, state_file, scan_script, scan_python):
+def render_metadata(destination, state_file, scan_script, scan_python, reset_script):
     template = json.loads((SOURCE / "metadata.template.json").read_text(encoding="utf-8"))
     replacements = {
         "@STATE_FILE@": str(state_file),
         "@SCAN_SCRIPT@": str(scan_script),
         "@SCAN_PYTHON@": str(scan_python),
+        "@RESET_SCRIPT@": str(reset_script),
     }
     for key, value in list(template.items()):
         if isinstance(value, str) and value in replacements:
@@ -30,7 +31,7 @@ def render_metadata(destination, state_file, scan_script, scan_python):
     )
 
 
-def install(destination, state_file, scan_script, scan_python):
+def install(destination, state_file, scan_script, scan_python, reset_script):
     destination.mkdir(parents=True, exist_ok=True)
     for name in ("extension.js", "prefs.js", "stylesheet.css"):
         shutil.copy2(SOURCE / name, destination / name)
@@ -45,7 +46,7 @@ def install(destination, state_file, scan_script, scan_python):
         ["glib-compile-schemas", "--strict", str(schemas)],
         check=True,
     )
-    render_metadata(destination, state_file, scan_script, scan_python)
+    render_metadata(destination, state_file, scan_script, scan_python, reset_script)
 
 
 def main():
@@ -54,12 +55,14 @@ def main():
     parser.add_argument("--state-file", type=Path, default=ROOT / "uso.json")
     parser.add_argument("--scan-script", type=Path, default=ROOT / "src/chatgpt_usage/scan_accounts.py")
     parser.add_argument("--scan-python", type=Path, default=DEFAULT_PYTHON)
+    parser.add_argument("--reset-script", type=Path, default=ROOT / "src/chatgpt_usage/redeem_reset.py")
     args = parser.parse_args()
     install(
         args.destination.expanduser(),
         args.state_file.expanduser(),
         args.scan_script.expanduser(),
         args.scan_python.expanduser(),
+        args.reset_script.expanduser(),
     )
     print(f"Extensión instalada en {args.destination.expanduser()}")
 

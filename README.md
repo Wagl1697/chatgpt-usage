@@ -10,6 +10,9 @@ esas sesiones para consultar los límites directamente.
 - Una fuente por vez en la barra, con carrusel configurable.
 - Menú con anillos de 5 horas y semanal para cada cuenta de ChatGPT, y 5 horas,
   semanal y mensual para OpenCode Go.
+- Restablecimientos disponibles por cuenta, con vencimiento y botón de dos
+  pasos (`Usar restablecimiento` → `Confirmar`). La confirmación vuelve a
+  comprobar cuenta, disponibilidad y compatibilidad antes de canjearlo.
 - Reinicios en formato `⏰ dd/mm/aa hh:mm`.
 - Resumen al pasar el cursor, alineado a la izquierda.
 - Pausa y reanudación de todas las consultas desde el menú.
@@ -92,7 +95,7 @@ Rutas:
 - `/widget` vista compacta.
 - `/api/summary.txt` texto para widgets.
 - `/api/summary.json` resumen estructurado.
-- `/api/uso.json` informe crudo.
+- `/api/uso.json` informe de solo lectura (sin identificadores de canje).
 
 No tiene autenticación propia: la seguridad depende de Tailscale y de sus ACL.
 No uses Tailscale Funnel para exponerlo a Internet.
@@ -106,11 +109,15 @@ No uses Tailscale Funnel para exponerlo a Internet.
 - `uso.json` se escribe de forma atómica y con permisos restringidos.
 - Las consultas usan endpoints internos de ChatGPT y OpenCode; pueden cambiar o
   rechazar el flujo.
+- Consultar restablecimientos es de solo lectura. El único cambio remoto ocurre
+  cuando se pulsa **Confirmar**; ese canje puede ser irreversible. El informe
+  local conserva el identificador y el vencimiento de los restablecimientos
+  disponibles, pero nunca credenciales.
 
 ## Pruebas
 
 ```sh
-PYTHONPATH=src .venv/bin/python -m unittest -v test_monitor.py test_accounts.py
+PYTHONPATH=src .venv/bin/python -m unittest -v test_monitor.py test_accounts.py test_redeem_reset.py test_web.py
 ```
 
 Las pruebas usan cuentas ficticias y no necesitan red.

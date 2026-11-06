@@ -30,6 +30,24 @@ export function resetLabel(resetAt) {
     return `⏰ ${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${String(date.getFullYear()).slice(-2)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+export function resetExpiryLabel(value) {
+    const millis = typeof value === 'string' ? Date.parse(value) : NaN;
+    if (!Number.isFinite(millis))
+        return 'Caducidad no disponible';
+    const date = new Date(millis);
+    const dateText = date.toLocaleString('es', {
+        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+        hourCycle: 'h23',
+    }).replace(/\./g, '');
+    const offset = -date.getTimezoneOffset();
+    const sign = offset < 0 ? '-' : '+';
+    const absolute = Math.abs(offset);
+    const hours = Math.floor(absolute / 60);
+    const minutes = absolute % 60;
+    const timezone = `GMT${sign}${hours}${minutes ? `:${String(minutes).padStart(2, '0')}` : ''}`;
+    return `Caduca el ${dateText} ${timezone}`;
+}
+
 export function accountTag(identity) {
     return String(identity || 'perfil').split('@', 1)[0];
 }
@@ -120,6 +138,7 @@ export default class ChatGPTPlanMonitor extends Extension {
         this._reading = false;
         this._carouselIndex = 0;
         this._lastReport = {};
+        this._consumedResetCredits = new Set();
         this._settings = this.getSettings();
         this._displayNames = this._readDisplayNames();
         this._carouselOrder = this._readCarouselOrder();
@@ -370,12 +389,16 @@ export default class ChatGPTPlanMonitor extends Extension {
                     separator,
                     heading: this._row('', this._chatgptSection), status: this._row('', this._chatgptSection),
                     dashboard: makeRingDashboard(this._chatgptSection, [['five_hour', '5 horas'], ['weekly', 'Semanal']]),
+                    resetHeader: this._row('Restablecimientos disponibles', this._chatgptSection),
+                    resetItems: new Map(),
                 };
+                rows.resetHeader.hide();
                 this._accountRows.set(key, rows);
             }
             rows.heading.label.set_text(`ChatGPT · ${account.identity}`);
             rows.status.label.set_text(account.fresh ? `● Actualizado · plan ${account.plan_type || 'ChatGPT'}` : `⚠ ${account.status || 'Sin datos actuales'}`);
             rows.dashboard.update(account.windows, now);
+            this._updateResetCredits(rows, account);
         }
         for (const [key, rows] of this._accountRows) {
             if (!seenAccounts.has(key)) {
@@ -383,6 +406,9 @@ export default class ChatGPTPlanMonitor extends Extension {
                 rows.heading?.destroy();
                 rows.status?.destroy();
                 rows.dashboard?.item?.destroy();
+                rows.resetHeader?.destroy();
+                for (const resetRow of rows.resetItems?.values() || [])
+                    resetRow.item.destroy();
                 this._accountRows.delete(key);
             }
         }
@@ -407,6 +433,129 @@ export default class ChatGPTPlanMonitor extends Extension {
             return;
         this._carouselIndex = (this._carouselIndex + 1) % sources.length;
         this._render(this._lastReport, true);
+    }
+
+    _updateResetCredits(rows, account) {
+        const email = typeof account.email === 'string' ? account.email : '';
+        const credits = (email && Array.isArray(account.reset_credits) ? account.reset_credits : [])
+            .filter(credit => credit && typeof credit.id === 'string' &&
+                !this._consumedResetCredits.has(`${email.toLocaleLowerCase()}\u0000${credit.id}`));
+        rows.resetHeader.label.set_text(account.reset_credits_status
+            ? 'No se pudieron consultar los restablecimientos'
+            : `Restablecimientos disponibles (${credits.length})`);
+        rows.resetHeader.visible = credits.length > 0 || Boolean(account.reset_credits_status);
+        const visibleIds = new Set(credits.map(credit => credit.id));
+        for (const [id, row] of rows.resetItems) {
+            if (visibleIds.has(id))
+                continue;
+            row.destroyed = true;
+            row.item.destroy();
+            rows.resetItems.delete(id);
+        }
+
+        for (const credit of credits) {
+            let row = rows.resetItems.get(credit.id);
+            if (!row) {
+                const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+                item.set_style('padding: 3px 8px;');
+                const box = new St.BoxLayout({x_expand: true, y_expand: false});
+                const labels = new St.BoxLayout({vertical: true, x_expand: true, y_expand: false});
+                const title = new St.Label({text: '', x_align: Clutter.ActorAlign.START, x_expand: true});
+                const expiry = new St.Label({text: '', x_align: Clutter.ActorAlign.START, x_expand: true, style_class: 'dim-label'});
+                const button = new St.Button({
+                    label: 'Usar restablecimiento',
+                    can_focus: true,
+                    reactive: true,
+                    track_hover: true,
+                    style_class: 'button',
+                    x_align: Clutter.ActorAlign.END,
+                });
+                labels.add_child(title);
+                labels.add_child(expiry);
+                box.add_child(labels);
+                box.add_child(button);
+                item.add_child(box);
+                this._chatgptSection.addMenuItem(item);
+                row = {item, title, expiry, button, credit, email: account.email, confirmed: false, loading: false, destroyed: false};
+                button.connect('clicked', () => this._onResetButton(row));
+                rows.resetItems.set(credit.id, row);
+            }
+            row.credit = credit;
+            row.email = email;
+            row.fresh = account.fresh;
+            row.title.set_text(credit.title || 'Restablecimiento de límites');
+            row.expiry.set_text(resetExpiryLabel(credit.expires_at));
+            if (row.loading)
+                row.button.set_label('Aplicando…');
+            else if (!credit.is_supported_by_plan)
+                row.button.set_label('No disponible para este plan');
+            else
+                row.button.set_label(row.confirmed ? 'Confirmar' : 'Usar restablecimiento');
+            row.button.set_sensitive(account.fresh && credit.is_supported_by_plan && !row.loading);
+        }
+    }
+
+    _onResetButton(row) {
+        if (this._stopped || row.destroyed || row.loading || !row.email || !row.credit.is_supported_by_plan)
+            return;
+        if (!row.confirmed) {
+            row.confirmed = true;
+            row.button.set_label('Confirmar');
+            return;
+        }
+        const python = this.metadata['scan-python'];
+        const script = this.metadata['reset-script'];
+        if (!python || !script) {
+            Main.notify('Restablecimiento de ChatGPT', 'Falta configurar el ayudante de restablecimientos.');
+            return;
+        }
+        let launcher;
+        let process;
+        try {
+            launcher = new Gio.SubprocessLauncher({
+                flags: Gio.SubprocessFlags.STDIN_PIPE |
+                    Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
+            });
+            const schemaDir = GLib.build_filenamev([
+                GLib.get_home_dir(), '.local/share/gnome-shell/extensions', this.uuid, 'schemas',
+            ]);
+            launcher.setenv('CHATGPT_USAGE_SCHEMA_DIR', schemaDir, true);
+            process = launcher.spawnv([python, script]);
+        } catch (error) {
+            Main.notify('Restablecimiento de ChatGPT', 'No se pudo iniciar la operación.');
+            return;
+        }
+        row.loading = true;
+        row.button.set_sensitive(false);
+        row.button.set_label('Aplicando…');
+        const input = JSON.stringify({email: row.email, credit_id: row.credit.id, confirmed: true});
+        process.communicate_utf8_async(input, this._cancellable, (proc, result) => {
+            let message = 'No se pudo completar el restablecimiento.';
+            let success = false;
+            let code = null;
+            try {
+                const [, stdout] = proc.communicate_utf8_finish(result);
+                const response = JSON.parse(stdout || '{}');
+                message = typeof response.message === 'string' ? response.message : message;
+                success = response.ok === true;
+                code = response.code || null;
+            } catch (error) {
+                // Keep the UI alive if the helper exits without a valid response.
+            }
+            if (this._stopped)
+                return;
+            if (success && code)
+                this._consumedResetCredits.add(`${row.email.toLocaleLowerCase()}\u0000${row.credit.id}`);
+            row.loading = false;
+            row.confirmed = false;
+            if (!row.destroyed) {
+                row.button.set_label(row.credit.is_supported_by_plan ? 'Usar restablecimiento' : 'No disponible para este plan');
+                row.button.set_sensitive(row.fresh && row.credit.is_supported_by_plan);
+            }
+            Main.notify('Restablecimiento de ChatGPT', message);
+            if (success)
+                this._refresh();
+        });
     }
 
     disable() {

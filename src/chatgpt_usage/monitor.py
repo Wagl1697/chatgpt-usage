@@ -112,6 +112,7 @@ class UsageClient:
         self.token = None
         self.refresh_at = 0
         self.email = None
+        self._reset_credits_cache = {}
 
     def close(self):
         self.token = None
@@ -137,6 +138,60 @@ class UsageClient:
         if not isinstance(data, dict):
             raise MonitorError("Respuesta inesperada del servidor")
         return data
+
+    def post_json(self, path, body, headers=None):
+        try:
+            response = self.session.post(
+                ORIGIN + path, json=body, headers=headers or {}, allow_redirects=False
+            )
+        except requests.RequestsError:
+            raise MonitorError("Error de conexión HTTPS") from None
+        if response.status_code != 200:
+            raise MonitorError(
+                f"HTTP {response.status_code}", response.status_code,
+                response.headers.get("retry-after"),
+            )
+        try:
+            data = response.json()
+        except ValueError:
+            raise MonitorError("El servidor no devolvió JSON") from None
+        if not isinstance(data, dict):
+            raise MonitorError("Respuesta inesperada del servidor")
+        return data
+
+    def read_reset_credits(self, force=False):
+        """List redeemable resets; cache this optional endpoint for one minute."""
+        if not self.token:
+            raise MonitorError("No hay una sesión de ChatGPT disponible", 401)
+        key = (self.email or "").casefold()
+        now = time.monotonic()
+        cached = self._reset_credits_cache.get(key) if key else None
+        if not force and cached and now - cached[0] < 60:
+            _, credits, status = cached
+            return [dict(item) for item in credits], status
+        try:
+            payload = self.get_json(
+                "/backend-api/wham/rate-limit-reset-credits",
+                {"Authorization": "Bearer " + self.token},
+            )
+            credits = parse_reset_credits(payload)
+            status = None
+        except MonitorError as error:
+            credits = []
+            status = str(error)
+        if key:
+            self._reset_credits_cache[key] = (now, credits, status)
+        return [dict(item) for item in credits], status
+
+    def consume_reset_credit(self, credit_id, redeem_request_id):
+        """Consume one reset after the UI has explicitly confirmed the action."""
+        if not self.token:
+            raise MonitorError("No hay una sesión de ChatGPT disponible", 401)
+        return self.post_json(
+            "/backend-api/wham/rate-limit-reset-credits/consume",
+            {"credit_id": credit_id, "redeem_request_id": redeem_request_id},
+            {"Authorization": "Bearer " + self.token},
+        )
 
     def authenticate(self, cookies=None):
         self.session.cookies.clear()
@@ -172,7 +227,12 @@ class UsageClient:
         limits = data.get("rate_limit")
         if not isinstance(limits, dict):
             raise MonitorError("El servidor no incluyó los límites del plan")
-        return {"email": self.email, "plan_type": data.get("plan_type"), "rate_limit": limits}
+        resets, resets_status = self.read_reset_credits()
+        return {
+            "email": self.email, "plan_type": data.get("plan_type"),
+            "rate_limit": limits, "reset_credits": resets,
+            "reset_credits_status": resets_status,
+        }
 
     def read(self):
         cached = False
@@ -231,6 +291,8 @@ class UsageClient:
                 token = session_data.get("accessToken")
                 if not isinstance(token, str) or not token:
                     raise MonitorError("Sesión vencida", 401)
+                self.token = token
+                self.email = email
                 usage = self.get_json("/backend-api/wham/usage", {"Authorization": "Bearer " + token})
                 rate_limit = usage.get("rate_limit")
                 if not isinstance(rate_limit, dict):
@@ -240,6 +302,12 @@ class UsageClient:
                     "status": "OK",
                     "fetched_at": time.time(),
                     "plan_type": usage.get("plan_type"),
+                })
+                resets, resets_status = self.read_reset_credits()
+                record.update({
+                    "reset_credits": resets,
+                    "reset_credits_status": resets_status,
+                    "reset_credits_fetched_at": time.time() if resets_status is None else None,
                 })
             except MonitorError as error:
                 # Keep failure attached to this identity; never fall back to a
@@ -268,6 +336,35 @@ def windows_from_rate_limit(rate_limit):
     return windows
 
 
+def parse_reset_credits(payload):
+    """Whitelist available reset fields; never retain user IDs or image URLs."""
+    credits = payload.get("credits") if isinstance(payload, dict) else None
+    if not isinstance(credits, list):
+        raise MonitorError("OpenAI no devolvió la lista de restablecimientos")
+    result = []
+    for credit in credits:
+        if not isinstance(credit, dict) or credit.get("status") != "available":
+            continue
+        credit_id = credit.get("id")
+        title = credit.get("title")
+        expires_at = credit.get("expires_at")
+        reset_type = credit.get("reset_type")
+        if not isinstance(credit_id, str) or not credit_id or len(credit_id) > 512:
+            continue
+        if not isinstance(title, str) or not isinstance(expires_at, str):
+            continue
+        if not isinstance(reset_type, str):
+            reset_type = ""
+        result.append({
+            "id": credit_id,
+            "title": title[:180],
+            "expires_at": expires_at[:100],
+            "reset_type": reset_type[:80],
+            "is_supported_by_plan": credit.get("is_supported_by_plan") is True,
+        })
+    return result
+
+
 def read_tracked_accounts(client, entries):
     """Query only enabled accounts using their saved browser sources."""
     cache = {}
@@ -281,6 +378,7 @@ def read_tracked_accounts(client, entries):
             "status": "Sin consultar",
             "fetched_at": None,
             "windows": {},
+            "reset_credits": [],
         }
         errors = []
         for source in entry.get("sources") or []:
@@ -310,6 +408,11 @@ def read_tracked_accounts(client, entries):
                 "fetched_at": time.time(),
                 "plan_type": report.get("plan_type"),
                 "windows": windows_from_rate_limit(report.get("rate_limit") or {}),
+                "reset_credits": report.get("reset_credits", []),
+                "reset_credits_status": report.get("reset_credits_status"),
+                "reset_credits_fetched_at": (
+                    time.time() if report.get("reset_credits_status") is None else None
+                ),
             })
             break
         else:
@@ -508,6 +611,17 @@ def save_report(data, fetched_at, status, opencode_go=None, go_fetched_at=None, 
             }
     serialized_accounts = []
     for account in chatgpt_accounts or []:
+        reset_credits = []
+        for credit in account.get("reset_credits") or []:
+            if not isinstance(credit, dict):
+                continue
+            reset_credits.append({
+                "id": credit.get("id"),
+                "title": credit.get("title"),
+                "expires_at": credit.get("expires_at"),
+                "reset_type": credit.get("reset_type"),
+                "is_supported_by_plan": credit.get("is_supported_by_plan") is True,
+            })
         serialized_accounts.append({
             "label": account.get("label"),
             "email": account.get("email"),
@@ -515,6 +629,9 @@ def save_report(data, fetched_at, status, opencode_go=None, go_fetched_at=None, 
             "fetched_at": account.get("fetched_at"),
             "plan_type": account.get("plan_type"),
             "windows": account.get("windows", {}),
+            "reset_credits": reset_credits,
+            "reset_credits_status": account.get("reset_credits_status"),
+            "reset_credits_fetched_at": account.get("reset_credits_fetched_at"),
         })
     report["chatgpt_accounts"] = serialized_accounts
     temporary = ROOT / ".uso.json.tmp"
@@ -538,6 +655,9 @@ def merge_chatgpt_accounts(previous, current):
             account["windows"] = prior["windows"]
             account["fetched_at"] = prior.get("fetched_at")
             account["plan_type"] = prior.get("plan_type")
+            account["reset_credits"] = prior.get("reset_credits", [])
+            account["reset_credits_status"] = prior.get("reset_credits_status")
+            account["reset_credits_fetched_at"] = prior.get("reset_credits_fetched_at")
         merged.append(account)
     return merged
 

@@ -29,6 +29,59 @@ class MonitorTests(unittest.TestCase):
         text = monitor.render({"rate_limit": {"primary_window": {"used_percent": 0}}}, 1700000000, "OK")
         self.assertIn("Restante: 100 %", text)
 
+    def test_reset_credit_parser_keeps_only_available_whitelisted_fields(self):
+        payload = {"credits": [
+            {
+                "id": "credit-1", "status": "available", "title": "Restablecimiento total",
+                "expires_at": "2026-12-01T18:00:00Z", "reset_type": "total",
+                "is_supported_by_plan": True, "profile_user_id": "private",
+                "profile_image_url": "https://example.invalid/private.png",
+            },
+            {"id": "credit-2", "status": "redeemed", "title": "No conservar"},
+        ], "total_earned_count": 99}
+        result = monitor.parse_reset_credits(payload)
+        self.assertEqual(result, [{
+            "id": "credit-1", "title": "Restablecimiento total",
+            "expires_at": "2026-12-01T18:00:00Z", "reset_type": "total",
+            "is_supported_by_plan": True,
+        }])
+        self.assertNotIn("profile_user_id", json.dumps(result))
+
+    def test_reset_credit_parser_rejects_invalid_payload(self):
+        with self.assertRaises(monitor.MonitorError):
+            monitor.parse_reset_credits({"credits": {}})
+
+    def test_reset_credit_list_is_cached_and_can_be_forced(self):
+        client = self.make_client()
+        client.email = "alice@example.com"
+        payload = {"credits": [{
+            "id": "credit-1", "status": "available", "title": "Reset",
+            "expires_at": "2026-12-01T18:00:00Z", "reset_type": "total",
+            "is_supported_by_plan": True,
+        }]}
+        client.get_json = Mock(return_value=payload)
+        first, status = client.read_reset_credits()
+        second, _ = client.read_reset_credits()
+        forced, _ = client.read_reset_credits(force=True)
+        self.assertIsNone(status)
+        self.assertEqual(first, second)
+        self.assertEqual(first, forced)
+        self.assertEqual(client.get_json.call_count, 2)
+
+    def test_reset_consumption_posts_only_the_requested_credit(self):
+        client = self.make_client()
+        response = Mock(status_code=200, headers={})
+        response.json.return_value = {"code": "reset"}
+        client.session.post.return_value = response
+        result = client.consume_reset_credit("credit-1", "request-1")
+        self.assertEqual(result, {"code": "reset"})
+        args, kwargs = client.session.post.call_args
+        self.assertEqual(args[0], monitor.ORIGIN + "/backend-api/wham/rate-limit-reset-credits/consume")
+        self.assertEqual(kwargs["json"], {
+            "credit_id": "credit-1", "redeem_request_id": "request-1",
+        })
+        self.assertFalse(kwargs["allow_redirects"])
+
     def test_expired_countdown_not_negative(self):
         self.assertEqual(monitor.duration(-100), "0 d 0 h 0 min 0 s")
 
@@ -134,8 +187,10 @@ class MonitorTests(unittest.TestCase):
         client.get_json = Mock(side_effect=[
             {"accessToken": "token-a", "user": {"email": "alice@example.com"}},
             {"rate_limit": {"primary_window": {"used_percent": 20, "reset_at": 1800000000}, "secondary_window": {"used_percent": 10}}, "plan_type": "plus"},
+            {"credits": []},
             {"accessToken": "token-b", "user": {"email": "bob@example.com"}},
             {"rate_limit": {"primary_window": {"used_percent": 70, "reset_at": 1800000100}, "secondary_window": {"used_percent": 40}}, "plan_type": "pro"},
+            {"credits": []},
         ])
         with patch.object(monitor, "firefox_cookie_profiles_named", return_value=[("profile-a", cookie_a), ("profile-b", cookie_b)]):
             accounts = client.read_accounts()
@@ -154,6 +209,7 @@ class MonitorTests(unittest.TestCase):
             monitor.MonitorError("HTTP 401", 401),
             {"accessToken": "token-b", "user": {"email": "bob@example.com"}},
             {"rate_limit": {"primary_window": {"used_percent": 30}}, "plan_type": "plus"},
+            {"credits": []},
         ])
         with patch.object(monitor, "firefox_cookie_profiles_named", return_value=profiles):
             accounts = client.read_accounts()
@@ -270,6 +326,21 @@ class MonitorTests(unittest.TestCase):
             report = json.loads(report_text)
             self.assertEqual(report["opencode_go"]["windows"]["five_hour"]["remaining_percent"], 98)
             self.assertIn("OpenCode Go · límite de 5 horas", (Path(tmp) / "uso.txt").read_text())
+
+    def test_report_keeps_reset_action_fields_but_discards_profile_metadata(self):
+        account = {
+            "email": "alice@example.com", "status": "OK", "fetched_at": 1700000000,
+            "reset_credits": [{
+                "id": "credit-1", "title": "Reset", "expires_at": "2026-12-01T18:00:00Z",
+                "reset_type": "total", "is_supported_by_plan": True,
+                "profile_user_id": "must-not-be-saved",
+            }],
+        }
+        with tempfile.TemporaryDirectory() as tmp, patch.object(monitor, "ROOT", Path(tmp)):
+            monitor.save_report(None, None, "OK", chatgpt_accounts=[account])
+            text = (Path(tmp) / "uso.json").read_text()
+        self.assertIn("credit-1", text)
+        self.assertNotIn("must-not-be-saved", text)
 
 
 if __name__ == "__main__":
