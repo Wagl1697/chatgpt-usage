@@ -11,7 +11,7 @@ esas sesiones para consultar los límites directamente.
 - Menú con anillos de 5 horas y semanal para cada cuenta de ChatGPT, y 5 horas,
   semanal y mensual para OpenCode Go.
 - Restablecimientos disponibles por cuenta, con vencimiento y botón de dos
-  pasos (`Usar restablecimiento` → `Confirmar`). La confirmación vuelve a
+  pasos (`Usar` → `Confirmar`). La confirmación vuelve a
   comprobar cuenta, disponibilidad y compatibilidad antes de canjearlo.
 - Reinicios en formato `⏰ dd/mm/aa hh:mm`.
 - Resumen al pasar el cursor, alineado a la izquierda.
@@ -118,9 +118,23 @@ No uses Tailscale Funnel para exponerlo a Internet.
 
 ```sh
 PYTHONPATH=src .venv/bin/python -m unittest -v test_monitor.py test_accounts.py test_redeem_reset.py test_web.py
+node --test test_ui.mjs
 ```
 
-Las pruebas usan cuentas ficticias y no necesitan red.
+Las pruebas usan cuentas ficticias y no necesitan red. Las pruebas JavaScript
+recorren el renderizado de varias cuentas y de OpenCode Go, incluyendo botones
+con la API de St (sin métodos de Gtk).
+
+En una máquina con GNOME se puede comprobar además la extensión completa con
+actores reales y medir el tamaño del botón:
+
+```sh
+python3 scripts/test_gnome.py
+```
+
+Esta prueba arranca una Shell Wayland headless con HOME, configuración y bus
+D-Bus aislados; no toca la sesión gráfica, cuentas ni preferencias reales. El
+ayudante de canje está deshabilitado y solo se comprueba el primer clic.
 
 ## Limitaciones
 

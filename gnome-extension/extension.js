@@ -52,6 +52,16 @@ export function accountTag(identity) {
     return String(identity || 'perfil').split('@', 1)[0];
 }
 
+export function setResetButtonEnabled(button, enabled) {
+    // St.Button is a Clutter actor, not a Gtk.Widget (no set_sensitive()).
+    button.reactive = Boolean(enabled);
+    button.can_focus = Boolean(enabled);
+    if (enabled)
+        button.remove_style_pseudo_class('disabled');
+    else
+        button.add_style_pseudo_class('disabled');
+}
+
 export function carouselSources(accounts, goReport, displayNames = {}, configuredOrder = []) {
     const sources = (Array.isArray(accounts) ? accounts : []).map(account => {
         const email = String(account.email || account.label || 'Firefox profile');
@@ -173,6 +183,8 @@ export default class ChatGPTPlanMonitor extends Extension {
         this._button.menu.connect('open-state-changed', (_menu, open) => {
             if (open)
                 this._refresh();
+            else
+                this._clearResetConfirmations();
             this._syncTooltip();
         });
         this._tooltip = new St.Label({style_class: 'chatgpt-usage-tooltip', visible: false, reactive: false, x_align: Clutter.ActorAlign.START});
@@ -378,18 +390,20 @@ export default class ChatGPTPlanMonitor extends Extension {
         this._pollSwitch.setToggleState(this._pollingEnabled);
         this._status.label.set_text(!this._pollingEnabled ? '⏸ Consultas pausadas — valores anteriores' : chatgptFresh && goFresh ? '● ChatGPT y OpenCode Go actualizados' : '⚠ Hay datos sin actualizar — ver estados abajo');
         const seenAccounts = new Set();
+        let resetRenderFailed = false;
         for (const account of accounts) {
             const key = String(account.email || account.label || account.identity).toLocaleLowerCase();
             seenAccounts.add(key);
             let rows = this._accountRows.get(key);
             if (!rows) {
-                const separator = new PopupMenu.PopupSeparatorMenuItem();
-                this._chatgptSection.addMenuItem(separator);
+                const section = new PopupMenu.PopupMenuSection();
+                this._chatgptSection.addMenuItem(section);
+                section.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
                 rows = {
-                    separator,
-                    heading: this._row('', this._chatgptSection), status: this._row('', this._chatgptSection),
-                    dashboard: makeRingDashboard(this._chatgptSection, [['five_hour', '5 horas'], ['weekly', 'Semanal']]),
-                    resetHeader: this._row('Restablecimientos disponibles', this._chatgptSection),
+                    section,
+                    heading: this._row('', section), status: this._row('', section),
+                    dashboard: makeRingDashboard(section, [['five_hour', '5 horas'], ['weekly', 'Semanal']]),
+                    resetHeader: this._row('', section),
                     resetItems: new Map(),
                 };
                 rows.resetHeader.hide();
@@ -398,30 +412,36 @@ export default class ChatGPTPlanMonitor extends Extension {
             rows.heading.label.set_text(`ChatGPT · ${account.identity}`);
             rows.status.label.set_text(account.fresh ? `● Actualizado · plan ${account.plan_type || 'ChatGPT'}` : `⚠ ${account.status || 'Sin datos actuales'}`);
             rows.dashboard.update(account.windows, now);
-            this._updateResetCredits(rows, account);
+            try {
+                this._updateResetCredits(rows, account);
+            } catch (error) {
+                // Optional reset controls must not stop other accounts or Go.
+                resetRenderFailed = true;
+                rows.resetHeader.label.set_text('⚠ No se pudieron mostrar los restablecimientos');
+                rows.resetHeader.show();
+                console.error('ChatGPT usage: error rendering reset controls', error);
+            }
         }
         for (const [key, rows] of this._accountRows) {
             if (!seenAccounts.has(key)) {
-                rows.separator?.destroy();
-                rows.heading?.destroy();
-                rows.status?.destroy();
-                rows.dashboard?.item?.destroy();
-                rows.resetHeader?.destroy();
                 for (const resetRow of rows.resetItems?.values() || [])
-                    resetRow.item.destroy();
+                    resetRow.destroyed = true;
+                rows.section.destroy();
                 this._accountRows.delete(key);
             }
         }
         const reads = accounts.map(account => account.fetched_at).filter(value => typeof value === 'number');
         if (typeof goReport.fetched_at === 'number')
             reads.push(goReport.fetched_at);
-        const latest = reads.length ? new Date(Math.max(...reads)) : null;
+        const latest = reads.length ? new Date(Math.max(...reads) * 1000) : null;
         const latestText = latest
             ? `${String(latest.getDate()).padStart(2, '0')}/${String(latest.getMonth() + 1).padStart(2, '0')}/${String(latest.getFullYear()).slice(-2)} ${String(latest.getHours()).padStart(2, '0')}:${String(latest.getMinutes()).padStart(2, '0')}`
             : '—';
         this._updated.label.set_text(`${this._pollingEnabled ? '' : '⏸ ' }Última lectura · ${latestText}`);
         this._goStatus.label.set_text(goFresh ? '● OpenCode Go actualizado' : `⚠ ${goReport.status || 'Esperando primera consulta de OpenCode Go'}`);
         this._goDashboard.update(goWindows, now);
+        if (resetRenderFailed)
+            this._status.label.set_text('⚠ Límites cargados; error al mostrar restablecimientos');
         this._updateTooltip(accounts, goWindows, goFresh);
         if (this._button.hover && !this._button.menu.isOpen)
             this._syncTooltip();
@@ -440,10 +460,8 @@ export default class ChatGPTPlanMonitor extends Extension {
         const credits = (email && Array.isArray(account.reset_credits) ? account.reset_credits : [])
             .filter(credit => credit && typeof credit.id === 'string' &&
                 !this._consumedResetCredits.has(`${email.toLocaleLowerCase()}\u0000${credit.id}`));
-        rows.resetHeader.label.set_text(account.reset_credits_status
-            ? 'No se pudieron consultar los restablecimientos'
-            : `Restablecimientos disponibles (${credits.length})`);
-        rows.resetHeader.visible = credits.length > 0 || Boolean(account.reset_credits_status);
+        rows.resetHeader.label.set_text('No se pudieron consultar los restablecimientos');
+        rows.resetHeader.visible = Boolean(account.reset_credits_status);
         const visibleIds = new Set(credits.map(credit => credit.id));
         for (const [id, row] of rows.resetItems) {
             if (visibleIds.has(id))
@@ -458,25 +476,27 @@ export default class ChatGPTPlanMonitor extends Extension {
             if (!row) {
                 const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
                 item.set_style('padding: 1px 6px;');
-                const box = new St.BoxLayout({x_expand: true, y_expand: false});
-                const labels = new St.BoxLayout({vertical: true, x_expand: true, y_expand: false});
+                const box = new St.BoxLayout({x_expand: true, y_expand: false, style_class: 'chatgpt-usage-reset-row'});
+                const labels = new St.BoxLayout({vertical: true, x_expand: true, y_expand: false, style_class: 'chatgpt-usage-reset-labels'});
                 const title = new St.Label({text: '', x_align: Clutter.ActorAlign.START, x_expand: true});
-                const expiry = new St.Label({text: '', x_align: Clutter.ActorAlign.START, x_expand: true, style_class: 'dim-label'});
+                const expiry = new St.Label({text: '', x_align: Clutter.ActorAlign.START, x_expand: true, style_class: 'chatgpt-usage-reset-expiry'});
                 const button = new St.Button({
                     label: 'Usar',
                     can_focus: true,
                     reactive: true,
                     track_hover: true,
-                    style_class: 'button',
+                    style_class: 'chatgpt-usage-reset-button',
                     x_align: Clutter.ActorAlign.END,
+                    y_align: Clutter.ActorAlign.CENTER,
+                    x_expand: false,
+                    y_expand: false,
                 });
-                button.set_style('padding: 1px 8px; min-height: 20px; max-height: 22px; font-size: 0.82em; border-radius: 999px;');
                 labels.add_child(title);
                 labels.add_child(expiry);
                 box.add_child(labels);
                 box.add_child(button);
                 item.add_child(box);
-                this._chatgptSection.addMenuItem(item);
+                rows.section.addMenuItem(item);
                 row = {item, title, expiry, button, credit, email: account.email, confirmed: false, loading: false, destroyed: false};
                 button.connect('clicked', () => this._onResetButton(row));
                 rows.resetItems.set(credit.id, row);
@@ -492,12 +512,23 @@ export default class ChatGPTPlanMonitor extends Extension {
                 row.button.set_label('No disponible');
             else
                 row.button.set_label(row.confirmed ? 'Confirmar' : 'Usar');
-            row.button.set_sensitive(account.fresh && credit.is_supported_by_plan && !row.loading);
+            setResetButtonEnabled(row.button, account.fresh && credit.is_supported_by_plan && !row.loading);
+        }
+    }
+
+    _clearResetConfirmations() {
+        for (const rows of this._accountRows?.values() || []) {
+            for (const row of rows.resetItems.values()) {
+                row.confirmed = false;
+                if (!row.loading)
+                    row.button.set_label(row.credit.is_supported_by_plan ? 'Usar' : 'No disponible');
+            }
         }
     }
 
     _onResetButton(row) {
-        if (this._stopped || row.destroyed || row.loading || !row.email || !row.credit.is_supported_by_plan)
+        if (this._stopped || row.destroyed || row.loading || !row.fresh ||
+            !row.button.reactive || !row.email || !row.credit.is_supported_by_plan)
             return;
         if (!row.confirmed) {
             row.confirmed = true;
@@ -527,7 +558,7 @@ export default class ChatGPTPlanMonitor extends Extension {
             return;
         }
         row.loading = true;
-        row.button.set_sensitive(false);
+        setResetButtonEnabled(row.button, false);
         row.button.set_label('Aplicando…');
         const input = JSON.stringify({email: row.email, credit_id: row.credit.id, confirmed: true});
         process.communicate_utf8_async(input, this._cancellable, (proc, result) => {
@@ -551,7 +582,7 @@ export default class ChatGPTPlanMonitor extends Extension {
             row.confirmed = false;
             if (!row.destroyed) {
                 row.button.set_label(row.credit.is_supported_by_plan ? 'Usar' : 'No disponible');
-                row.button.set_sensitive(row.fresh && row.credit.is_supported_by_plan);
+                setResetButtonEnabled(row.button, row.fresh && row.credit.is_supported_by_plan);
             }
             Main.notify('Restablecimiento de ChatGPT', message);
             if (success)

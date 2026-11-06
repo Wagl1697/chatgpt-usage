@@ -14,3 +14,37 @@
 .chatgpt-usage-menu-scroll {
     padding: 2px;
 }
+
+.chatgpt-usage-reset-row {
+    spacing: 10px;
+}
+
+.chatgpt-usage-reset-labels {
+    spacing: 1px;
+    font-size: 0.9em;
+}
+
+.chatgpt-usage-reset-expiry {
+    font-size: 0.85em;
+    color: #aaaaaa;
+}
+
+.chatgpt-usage-reset-button {
+    padding: 0 6px;
+    min-height: 0;
+    min-width: 0;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.08);
+    font-size: 0.85em;
+}
+
+.chatgpt-usage-reset-button:hover,
+.chatgpt-usage-reset-button:focus {
+    background-color: rgba(255, 255, 255, 0.18);
+}
+
+.chatgpt-usage-reset-button:disabled {
+    color: #888888;
+    background-color: transparent;
+}
