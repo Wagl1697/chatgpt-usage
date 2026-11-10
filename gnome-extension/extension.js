@@ -548,9 +548,7 @@ export default class ChatGPTPlanMonitor extends Extension {
                 flags: Gio.SubprocessFlags.STDIN_PIPE |
                     Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
             });
-            const schemaDir = GLib.build_filenamev([
-                GLib.get_home_dir(), '.local/share/gnome-shell/extensions', this.uuid, 'schemas',
-            ]);
+            const schemaDir = this.dir.get_child('schemas').get_path();
             launcher.setenv('CHATGPT_USAGE_SCHEMA_DIR', schemaDir, true);
             process = launcher.spawnv([python, script]);
         } catch (error) {

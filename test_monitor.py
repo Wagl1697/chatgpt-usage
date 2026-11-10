@@ -104,6 +104,17 @@ class MonitorTests(unittest.TestCase):
             report = json.loads((Path(tmp) / "uso.json").read_text())
             self.assertFalse(report["polling_enabled"])
 
+    def test_empty_selection_never_falls_back_to_scanning_browsers(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(monitor, "ROOT", Path(tmp)), \
+             patch.object(monitor.browser_accounts, "load_tracked_accounts", return_value=[]), \
+             patch.object(monitor, "UsageClient") as client, \
+             patch.object(monitor, "read_opencode_go", return_value={}), \
+             patch.object(monitor, "save_report") as save:
+            self.assertEqual(monitor.run(1), 0)
+            client.return_value.read_accounts.assert_not_called()
+            client.return_value.read_account.assert_not_called()
+            self.assertTrue(any("Sin cuentas activas" in str(call) for call in save.call_args_list))
+
     def test_retry_after(self):
         self.assertEqual(monitor.retry_seconds("180"), 180)
         self.assertEqual(monitor.retry_seconds("5"), 60)

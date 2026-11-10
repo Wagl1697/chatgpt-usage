@@ -2,7 +2,7 @@
 """Read a Chromium-family cookie key from GNOME Secret Service.
 
 The key is written as base64 to stdout and never logged. Run with the system
-Python because PyGObject is not available inside the prototype venv.
+Python because PyGObject is supplied by Ubuntu rather than the project venv.
 """
 
 import base64

@@ -147,7 +147,6 @@ export default class ChatGPTUsagePreferences extends ExtensionPreferences {
         const mergeScan = data => {
             const detected = Array.isArray(data.accounts) ? data.accounts : [];
             const prior = new Map(accounts.map(account => [String(account.email).toLocaleLowerCase(), account]));
-            const firstRun = accounts.length === 0;
             const seen = new Set();
             const merged = [];
             for (const account of detected) {
@@ -161,7 +160,7 @@ export default class ChatGPTUsagePreferences extends ExtensionPreferences {
                 const old = prior.get(key);
                 merged.push({
                     email,
-                    enabled: old ? old.enabled !== false : firstRun,
+                    enabled: old ? old.enabled !== false : false,
                     sources: Array.isArray(account.sources) ? account.sources : [],
                 });
             }

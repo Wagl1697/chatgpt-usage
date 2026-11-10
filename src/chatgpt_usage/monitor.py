@@ -19,7 +19,7 @@ from curl_cffi import requests
 
 from chatgpt_usage import browser_accounts
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("CHATGPT_USAGE_STATE_DIR", Path(__file__).resolve().parents[2])).expanduser()
 ORIGIN = "https://chatgpt.com"
 OPENCODE_USAGE_INTERVAL = 10
 CHATGPT_USAGE_INTERVAL = 10
@@ -735,11 +735,7 @@ def run(samples):
                     ]
                 else:
                     try:
-                        using_tracked = bool(tracked)
-                        fresh_accounts = (
-                            read_tracked_accounts(client, tracked)
-                            if using_tracked else client.read_accounts()
-                        )
+                        fresh_accounts = read_tracked_accounts(client, tracked)
                         chatgpt_accounts = merge_chatgpt_accounts(chatgpt_accounts, fresh_accounts)
                         successful = [item for item in chatgpt_accounts if item.get("status") == "OK"]
                         if successful:
@@ -756,13 +752,11 @@ def run(samples):
                             backoff = min(300, 10 * 2 ** min(failures - 1, 5))
                             server_retry = max((retry_seconds(item["retry_after"]) for item in chatgpt_accounts if item.get("retry_after")), default=0)
                             next_chatgpt_poll = time.monotonic() + max(backoff, server_retry)
-                        elif using_tracked:
+                        else:
                             status = "Sin cuentas activas — activalas en Preferencias"
                             data = None
                             fetched_at = None
                             next_chatgpt_poll = time.monotonic() + CHATGPT_USAGE_INTERVAL
-                        else:
-                            raise MonitorError("No se encontraron perfiles de Firefox")
                     except MonitorError as error:
                         failures += 1
                         status = f"{error}; los valores anteriores NO son actuales"
@@ -807,6 +801,7 @@ def main():
     if args.samples < 0:
         parser.error("--samples no puede ser negativo")
     os.umask(0o077)
+    ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
     with (ROOT / "monitor.lock").open("w") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

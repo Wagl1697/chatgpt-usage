@@ -54,7 +54,8 @@ def _schema_directories():
     configured = os.environ.get("CHATGPT_USAGE_SCHEMA_DIR")
     if configured:
         values.append(Path(configured).expanduser())
-    values.append(Path.home() / ".local/share/gnome-shell/extensions/chatgpt-usage@wlopez.local/schemas")
+    data_home = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share"))
+    values.append(data_home / "gnome-shell/extensions/chatgpt-usage@wlopez.local/schemas")
     values.append(Path(__file__).resolve().parents[2] / "gnome-extension" / "schemas")
     return values
 

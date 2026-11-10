@@ -1,4 +1,6 @@
-# Uso de ChatGPT y OpenCode Go en GNOME
+# Uso de ChatGPT y OpenCode Go en Ubuntu
+
+Proyecto comunitario no oficial. No está afiliado a OpenAI ni a OpenCode.
 
 Monitor local que consulta los límites de ChatGPT y OpenCode Go por HTTPS y los
 muestra en la barra superior de GNOME. No abre navegadores durante las consultas:
@@ -44,28 +46,67 @@ leen. El informe no contiene cookies, tokens ni contraseñas.
 
 ## Requisitos
 
-- Linux con GNOME Shell 46.
+- **Ubuntu Desktop 24.04 LTS con GNOME Shell 46**, versión comprobada.
+- Otras versiones de Ubuntu/GNOME todavía no están validadas; el instalador
+  rechaza versiones de Shell no admitidas, en lugar de instalar algo incompatible.
+- No funciona en Windows, macOS ni escritorios sin GNOME Shell.
 - Python 3.10 o posterior.
 - Firefox con una sesión de ChatGPT iniciada, o Chrome/Chromium/Edge/Brave con
   la clave correspondiente en el llavero.
-- `curl_cffi` y `cryptography` (se instalan en el entorno virtual).
+- `curl_cffi` y `cryptography` (el instalador los descarga en un entorno virtual).
+- OpenCode Go es opcional: requiere una suscripción Go y una conexión local
+  activa a OpenCode Console. No se importa la conexión del autor del proyecto.
 
-## Instalación local
+## Instalación
+
+Primero instalá los requisitos de Ubuntu:
 
 ```sh
+sudo apt update
+sudo apt install git python3-venv python3-gi gir1.2-secret-1 libglib2.0-bin
+```
+
+Después, como tu usuario normal (**sin sudo**):
+
+```sh
+git clone https://github.com/Wagl1697/chatgpt-usage.git
 cd chatgpt-usage
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-python3 scripts/install_local.py
+./install.sh
 ```
 
-El instalador copia la extensión, genera su `metadata.json` con las rutas
-absolutas de esta máquina y compila el esquema. Después:
+El instalador crea `.venv`, instala la extensión completa, genera las rutas
+para tu máquina, compila el esquema y activa el servicio systemd de tu usuario.
+**Cerrá sesión y volvé a entrar** para que GNOME cargue la extensión.
+
+No muevas ni borres la carpeta clonada mientras lo uses: allí están el código
+y su entorno virtual. Si la movés, ejecutá nuevamente `./install.sh` desde ella.
+
+El estado queda en `~/.local/state/chatgpt-usage/` y el registro de instalación
+en `~/.config/chatgpt-usage/` (se respetan las variables XDG correspondientes).
+Las cuentas, nombres y selección se guardan en GSettings, no en Git.
+
+Para instalar también el panel web opcional:
 
 ```sh
-systemctl --user restart chatgpt-usage-monitor.service
+./install.sh --with-web
 ```
-La extensión se carga al cerrar sesión y volver a entrar en GNOME.
+
+### Actualizar o desinstalar
+
+```sh
+git pull --ff-only
+./install.sh
+```
+
+La actualización conserva cuentas, preferencias y estado, incluido el panel web
+si ya estaba instalado. Volvé a iniciar sesión para cargar cambios de GNOME.
+
+```sh
+./install.sh --uninstall
+```
+
+La desinstalación detiene servicios y retira la extensión, pero **conserva**
+preferencias, datos locales y la carpeta clonada. No borra datos del navegador.
 
 ## Uso
 
@@ -78,6 +119,14 @@ La selección se guarda en GSettings. El monitor solo consulta las cuentas
 activas. Si no puede leer la selección, no consulta ninguna cuenta y muestra el
 error en el menú.
 
+Detectar cuentas hace consultas HTTPS de identidad a ChatGPT usando sus sesiones
+locales. Las cuentas recién detectadas quedan desactivadas hasta que las elijas;
+no se consultan cuotas automáticamente antes de configurar una selección.
+
+Las sesiones vencidas requieren volver a iniciar sesión en el navegador. Chrome,
+Edge, Chromium y Brave dependen de que el llavero de tu sesión esté desbloqueado;
+no todas las variantes de cifrado o instalaciones de navegador están garantizadas.
+
 ## Panel web opcional
 
 `web.py` sirve un panel de solo lectura y endpoints compactos para widgets.
@@ -85,7 +134,7 @@ Escucha en `127.0.0.1`; para verlo desde otro dispositivo se puede publicar en
 la tailnet con Tailscale Serve:
 
 ```sh
-PYTHONPATH=src .venv/bin/python -m chatgpt_usage.web
+./install.sh --with-web
 tailscale serve --bg --https=8445 http://127.0.0.1:8088
 ```
 
@@ -117,7 +166,7 @@ No uses Tailscale Funnel para exponerlo a Internet.
 ## Pruebas
 
 ```sh
-PYTHONPATH=src .venv/bin/python -m unittest -v test_monitor.py test_accounts.py test_redeem_reset.py test_web.py
+PYTHONPATH=src .venv/bin/python -m unittest discover -v
 node --test test_ui.mjs
 ```
 
@@ -143,4 +192,19 @@ ayudante de canje está deshabilitado y solo se comprueba el primer clic.
   disponible.
 - El panel web y el widget de Android son funciones opcionales; el widget nativo
   no está implementado.
-- La instalación pública y el empaquetado están en preparación.
+- ChatGPT y OpenCode usan endpoints internos: pueden cambiar sin aviso. La
+  disponibilidad de límites y restablecimientos depende del plan de cada cuenta.
+
+## Diagnóstico
+
+```sh
+systemctl --user status chatgpt-usage-monitor.service
+journalctl --user -u chatgpt-usage-monitor.service -n 30 --no-pager
+gnome-extensions info chatgpt-usage@wlopez.local
+```
+
+El UUID histórico de la extensión es el mismo para todos los usuarios; no
+requiere una cuenta del autor. Al reportar un problema, ocultá correos y rutas
+personales. Nunca compartas cookies, tokens, archivos de navegador ni `uso.json`.
+
+Licencia: [MIT](LICENSE).
