@@ -46,9 +46,12 @@ leen. El informe no contiene cookies, tokens ni contraseñas.
 
 ## Requisitos
 
-- **Ubuntu Desktop 24.04 LTS con GNOME Shell 46**, versión comprobada.
-- Otras versiones de Ubuntu/GNOME todavía no están validadas; el instalador
-  rechaza versiones de Shell no admitidas, en lugar de instalar algo incompatible.
+- **Ubuntu Desktop 24.04 LTS con GNOME Shell 46**, versión probada en desarrollo.
+- **Ubuntu 22.04 LTS con GNOME Shell 42**, soporte preparado y pendiente de
+  validación por la comunidad. Si algo falla, reportalo en GitHub.
+- Otras versiones de GNOME (43, 44, 45, 47, 48) no están validadas. El
+  instalador se detiene con un mensaje claro; `--allow-unsupported-version`
+  permite probar bajo tu responsabilidad.
 - No funciona en Windows, macOS ni escritorios sin GNOME Shell.
 - Python 3.10 o posterior.
 - Firefox con una sesión de ChatGPT iniciada, o Chrome/Chromium/Edge/Brave con
@@ -56,6 +59,18 @@ leen. El informe no contiene cookies, tokens ni contraseñas.
 - `curl_cffi` y `cryptography` (el instalador los descarga en un entorno virtual).
 - OpenCode Go es opcional: requiere una suscripción Go y una conexión local
   activa a OpenCode Console. No se importa la conexión del autor del proyecto.
+
+## Compatibilidad
+
+| Ubuntu | GNOME Shell | Estado |
+| --- | --- | --- |
+| 24.04 LTS | 46 | Probado en desarrollo |
+| 22.04 LTS | 42 | Preparado, falta validación de la comunidad |
+| Otras | 43–45, 47–48 | Sin validar; solo con `--allow-unsupported-version` |
+
+La extensión evita depender de APIs privadas cuando puede: si una versión de
+Shell no expone el menú interno que permite el desplazamiento, el menú sigue
+funcionando y solo crece sin barra de scroll.
 
 ## Instalación
 

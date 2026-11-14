@@ -128,6 +128,8 @@ def main(argv=None):
     parser.add_argument("--with-web", action="store_true", help="instalar también el panel web local")
     parser.add_argument("--uninstall", action="store_true", help="desinstalar sin borrar cuentas ni estado")
     parser.add_argument("--no-start", action="store_true", help="instalar archivos sin activar servicios ni extensión")
+    parser.add_argument("--allow-unsupported-version", action="store_true",
+                        help="continuar en una versión de GNOME no validada (sin garantías)")
     args = parser.parse_args(argv)
     if os.geteuid() == 0:
         parser.error("Ejecutá el instalador como tu usuario, sin sudo")
@@ -141,7 +143,11 @@ def main(argv=None):
     version = subprocess.check_output(["gnome-shell", "--version"], text=True).strip().split()[-1].split(".")[0]
     supported = json.loads((ROOT / "gnome-extension/metadata.template.json").read_text())["shell-version"]
     if version not in supported:
-        parser.error(f"GNOME {version} aún no está validado. Versiones admitidas: {', '.join(supported)}")
+        if not args.allow_unsupported_version:
+            parser.error(
+                f"GNOME {version} no está validado. Versiones admitidas: {', '.join(supported)}. "
+                "Si querés probar igual, agregá --allow-unsupported-version "
+                "y reportá los errores en GitHub.")
     previous = json.loads(paths["manifest"].read_text()) if paths["manifest"].exists() else {}
     with_web = args.with_web or previous.get("with_web", False) or (paths["units"] / WEB).is_file()
     python = ROOT / ".venv/bin/python"

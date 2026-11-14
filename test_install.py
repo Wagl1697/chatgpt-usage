@@ -69,6 +69,13 @@ class InstallTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             installer.quote("/bad\npath")
 
+    def test_template_declares_the_tested_shell_versions(self):
+        metadata = json.loads((ROOT / "gnome-extension/metadata.template.json").read_text())
+        self.assertIn("46", metadata["shell-version"])
+        self.assertIn("42", metadata["shell-version"])
+        # The template must keep machine paths as placeholders.
+        self.assertEqual(metadata["state-file"], "@STATE_FILE@")
+
     @unittest.skipUnless(shutil.which("systemd-analyze"), "systemd-analyze is not installed")
     def test_generated_unit_is_accepted_by_systemd(self):
         with tempfile.TemporaryDirectory(prefix="unit test % $ ") as tmp:

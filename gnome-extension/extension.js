@@ -57,6 +57,18 @@ export function clamp(value, minimum, maximum) {
     return Math.min(Math.max(value, minimum), maximum);
 }
 
+// `_boxPointer` is Shell internals whose shape varies between releases.
+// Wrapping the menu in a scroll view is an enhancement, never a requirement.
+export function attachMenuScroll(menu, scroll) {
+    const bin = menu?._boxPointer?.bin;
+    if (!bin || typeof bin.set_child !== 'function' || !menu.box)
+        return false;
+    bin.set_child(null);
+    scroll.set_child(menu.box);
+    bin.set_child(scroll);
+    return true;
+}
+
 export function setResetButtonEnabled(button, enabled) {
     // St.Button is a Clutter actor, not a Gtk.Widget (no set_sensitive()).
     button.reactive = Boolean(enabled);
@@ -222,10 +234,11 @@ export default class ChatGPTPlanMonitor extends Extension {
             y_expand: true,
         });
         this._menuScroll.set_style(`max-height: ${Math.floor(monitor.height * 0.82)}px; max-width: ${Math.floor(monitor.width * 0.58)}px;`);
-        const menuBin = this._button.menu._boxPointer.bin;
-        menuBin.set_child(null);
-        this._menuScroll.set_child(this._button.menu.box);
-        menuBin.set_child(this._menuScroll);
+        // Keep the menu usable if a Shell release changes its private popup internals.
+        if (!attachMenuScroll(this._button.menu, this._menuScroll)) {
+            this._menuScroll = null;
+            console.warn('ChatGPT usage: este Shell no expone _boxPointer; el menú crecerá sin desplazamiento.');
+        }
         Main.panel.addToStatusArea(this.uuid, this._button, 1, 'left');
         this._refresh();
         this._timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {

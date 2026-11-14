@@ -15,6 +15,7 @@ class Actor {
     }
 
     add_child(actor) { this.children.push(actor); }
+    set_child(actor) { this.children = actor ? [actor] : []; }
     addMenuItem(item) { this.add_child(item); }
     set_style(style) { this.style = style; }
     set_text(text) { this.text = text; }
@@ -57,15 +58,31 @@ const context = {
     },
     console: {error() {}},
 };
-const {Monitor, makeRingDashboard, setResetButtonEnabled, clamp} = vm.runInNewContext(
+const {Monitor, makeRingDashboard, setResetButtonEnabled, clamp, attachMenuScroll} = vm.runInNewContext(
     source.replace(/^import .*;\n/gm, '').replace(/export default class /, 'class ')
         .replace(/export function /g, 'function ') +
         '\n({Monitor: ChatGPTPlanMonitor, makeRingDashboard, setResetButtonEnabled: ' +
         'typeof setResetButtonEnabled === "function" ? setResetButtonEnabled : undefined, ' +
-        'clamp: typeof clamp === "function" ? clamp : undefined});',
+        'clamp: typeof clamp === "function" ? clamp : undefined, ' +
+        'attachMenuScroll: typeof attachMenuScroll === "function" ? attachMenuScroll : undefined});',
     context,
     {filename: 'gnome-extension/extension.js'},
 );
+
+test('menu scrolling attaches only when the Shell exposes the private bin', () => {
+    const inner = new Actor();
+    const bin = new Actor();
+    const scroll = new Actor();
+    const menu = {box: inner, _boxPointer: {bin}};
+    assert.equal(attachMenuScroll(menu, scroll), true);
+    assert.equal(scroll.children[0], inner);
+    assert.equal(bin.children[0], scroll);
+
+    // Older or newer Shell builds may not expose _boxPointer at all.
+    assert.equal(attachMenuScroll({box: inner}, scroll), false);
+    assert.equal(attachMenuScroll({box: inner, _boxPointer: {}}, scroll), false);
+    assert.equal(attachMenuScroll(null, scroll), false);
+});
 
 test('clamp replaces the unavailable Math.clamp', () => {
     assert.equal(clamp(-5, 0, 10), 0);
