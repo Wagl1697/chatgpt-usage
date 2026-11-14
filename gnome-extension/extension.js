@@ -52,6 +52,11 @@ export function accountTag(identity) {
     return String(identity || 'perfil').split('@', 1)[0];
 }
 
+// Math.clamp does not exist in GNOME Shell's JavaScript engine.
+export function clamp(value, minimum, maximum) {
+    return Math.min(Math.max(value, minimum), maximum);
+}
+
 export function setResetButtonEnabled(button, enabled) {
     // St.Button is a Clutter actor, not a Gtk.Widget (no set_sensitive()).
     button.reactive = Boolean(enabled);
@@ -319,7 +324,7 @@ export default class ChatGPTPlanMonitor extends Extension {
             const width = Math.min(Math.max(260, Math.floor(monitor.width * 0.32)), Math.floor(monitor.width * 0.65));
             this._tooltip.set_width(width);
             const [, height] = this._tooltip.get_preferred_height(width);
-            const x = Math.clamp(stageX + (buttonWidth - width) / 2, monitor.x, monitor.x + monitor.width - width);
+            const x = clamp(stageX + (buttonWidth - width) / 2, monitor.x, monitor.x + monitor.width - width);
             let y = stageY + buttonHeight + 6;
             if (y + height > monitor.y + monitor.height)
                 y = Math.max(monitor.y, stageY - height - 6);

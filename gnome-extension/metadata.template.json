@@ -3,7 +3,7 @@
   "name": "Uso de ChatGPT — menú izquierdo",
   "description": "Porcentajes restantes con menú desplegable al hacer clic, a la izquierda de la barra.",
   "shell-version": ["46"],
-  "version": 11,
+  "version": 12,
   "settings-schema": "org.gnome.shell.extensions.chatgpt-usage",
   "gettext-domain": "chatgpt-usage@wlopez.local",
   "session-modes": ["user"],

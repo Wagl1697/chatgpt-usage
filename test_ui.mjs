@@ -57,14 +57,26 @@ const context = {
     },
     console: {error() {}},
 };
-const {Monitor, makeRingDashboard, setResetButtonEnabled} = vm.runInNewContext(
+const {Monitor, makeRingDashboard, setResetButtonEnabled, clamp} = vm.runInNewContext(
     source.replace(/^import .*;\n/gm, '').replace(/export default class /, 'class ')
         .replace(/export function /g, 'function ') +
         '\n({Monitor: ChatGPTPlanMonitor, makeRingDashboard, setResetButtonEnabled: ' +
-        'typeof setResetButtonEnabled === "function" ? setResetButtonEnabled : undefined});',
+        'typeof setResetButtonEnabled === "function" ? setResetButtonEnabled : undefined, ' +
+        'clamp: typeof clamp === "function" ? clamp : undefined});',
     context,
     {filename: 'gnome-extension/extension.js'},
 );
+
+test('clamp replaces the unavailable Math.clamp', () => {
+    assert.equal(clamp(-5, 0, 10), 0);
+    assert.equal(clamp(15, 0, 10), 10);
+    assert.equal(clamp(5, 0, 10), 5);
+});
+
+test('the extension never calls Math.clamp', () => {
+    assert.ok(!source.includes('Math.clamp('),
+        'Math.clamp is undefined in GNOME Shell and breaks the hover tooltip');
+});
 
 function renderer() {
     const instance = new Monitor();
