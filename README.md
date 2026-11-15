@@ -198,11 +198,13 @@ python3 scripts/test_gnome.py
 
 Esta prueba arranca una Shell Wayland headless con HOME, configuración y bus
 D-Bus aislados; no toca la sesión gráfica, cuentas ni preferencias reales. El
-ayudante de canje está deshabilitado y solo se comprueba el primer clic.
+ayudante de canje está deshabilitado y solo se comprueba el primer clic. También
+se comprueba el inicio temprano con el monitor principal todavía no disponible.
 
 ## Limitaciones
 
-- GNOME Shell 46 es la versión validada actualmente.
+- GNOME Shell 46 tiene validación en una máquina Ubuntu real. GNOME 42 está
+  preparado pero pendiente de validación por la comunidad.
 - Chrome/Edge/Brave dependen del llavero del sistema y de que la clave esté
   disponible.
 - El panel web y el widget de Android son funciones opcionales; el widget nativo

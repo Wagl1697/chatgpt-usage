@@ -58,12 +58,13 @@ const context = {
     },
     console: {error() {}},
 };
-const {Monitor, makeRingDashboard, setResetButtonEnabled, clamp, attachMenuScroll} = vm.runInNewContext(
+const {Monitor, makeRingDashboard, setResetButtonEnabled, clamp, monitorBounds, attachMenuScroll} = vm.runInNewContext(
     source.replace(/^import .*;\n/gm, '').replace(/export default class /, 'class ')
         .replace(/export function /g, 'function ') +
         '\n({Monitor: ChatGPTPlanMonitor, makeRingDashboard, setResetButtonEnabled: ' +
         'typeof setResetButtonEnabled === "function" ? setResetButtonEnabled : undefined, ' +
         'clamp: typeof clamp === "function" ? clamp : undefined, ' +
+        'monitorBounds: typeof monitorBounds === "function" ? monitorBounds : undefined, ' +
         'attachMenuScroll: typeof attachMenuScroll === "function" ? attachMenuScroll : undefined});',
     context,
     {filename: 'gnome-extension/extension.js'},
@@ -88,6 +89,12 @@ test('clamp replaces the unavailable Math.clamp', () => {
     assert.equal(clamp(-5, 0, 10), 0);
     assert.equal(clamp(15, 0, 10), 10);
     assert.equal(clamp(5, 0, 10), 5);
+});
+
+test('monitor bounds tolerate a null primary monitor during Shell startup', () => {
+    assert.deepEqual({...monitorBounds(null)}, {x: 0, y: 0, width: 1280, height: 800});
+    assert.deepEqual({...monitorBounds({x: 50, y: 20, width: 1920, height: 1080})},
+        {x: 50, y: 20, width: 1920, height: 1080});
 });
 
 test('the extension never calls Math.clamp', () => {

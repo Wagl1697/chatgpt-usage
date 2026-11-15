@@ -57,6 +57,16 @@ export function clamp(value, minimum, maximum) {
     return Math.min(Math.max(value, minimum), maximum);
 }
 
+export function monitorBounds(monitor) {
+    const finite = (value, fallback) => typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+    return {
+        x: finite(monitor?.x, 0),
+        y: finite(monitor?.y, 0),
+        width: finite(monitor?.width, 1280),
+        height: finite(monitor?.height, 800),
+    };
+}
+
 // `_boxPointer` is Shell internals whose shape varies between releases.
 // Wrapping the menu in a scroll view is an enhancement, never a requirement.
 export function attachMenuScroll(menu, scroll) {
@@ -225,7 +235,11 @@ export default class ChatGPTPlanMonitor extends Extension {
                 this._syncTooltip();
             }),
         ];
-        const monitor = Main.layoutManager.primaryMonitor;
+        // During early session startup Shell can call enable() before a monitor
+        // object exists. The panel itself is available; use a sensible size
+        // until monitor discovery completes instead of aborting the extension.
+        const monitor = Main.layoutManager.primaryMonitor || Main.layoutManager.monitors?.[0] || null;
+        const bounds = monitorBounds(monitor);
         this._menuScroll = new St.ScrollView({
             style_class: 'chatgpt-usage-menu-scroll',
             hscrollbar_policy: St.PolicyType.NEVER,
@@ -233,7 +247,7 @@ export default class ChatGPTPlanMonitor extends Extension {
             x_expand: true,
             y_expand: true,
         });
-        this._menuScroll.set_style(`max-height: ${Math.floor(monitor.height * 0.82)}px; max-width: ${Math.floor(monitor.width * 0.58)}px;`);
+        this._menuScroll.set_style(`max-height: ${Math.floor(bounds.height * 0.82)}px; max-width: ${Math.floor(bounds.width * 0.58)}px;`);
         // Keep the menu usable if a Shell release changes its private popup internals.
         if (!attachMenuScroll(this._button.menu, this._menuScroll)) {
             this._menuScroll = null;
@@ -330,17 +344,23 @@ export default class ChatGPTPlanMonitor extends Extension {
         const show = this._showHoverSummary && this._button.hover && !this._button.menu.isOpen;
         if (show) {
             this._tooltip.set({text: this._tooltipText || 'Cargando límites…', visible: true, opacity: 0});
-            const monitor = Main.layoutManager.findMonitorForActor(this._button) || Main.layoutManager.primaryMonitor;
+            const monitor = Main.layoutManager.findMonitorForActor(this._button) ||
+                Main.layoutManager.primaryMonitor || Main.layoutManager.monitors?.[0] || null;
+            if (!monitor) {
+                this._tooltip.visible = false;
+                return;
+            }
+            const bounds = monitorBounds(monitor);
             const [stageX, stageY] = this._button.get_transformed_position();
             const buttonWidth = this._button.allocation.get_width();
             const buttonHeight = this._button.allocation.get_height();
-            const width = Math.min(Math.max(260, Math.floor(monitor.width * 0.32)), Math.floor(monitor.width * 0.65));
+            const width = Math.min(Math.max(260, Math.floor(bounds.width * 0.32)), Math.floor(bounds.width * 0.65));
             this._tooltip.set_width(width);
             const [, height] = this._tooltip.get_preferred_height(width);
-            const x = clamp(stageX + (buttonWidth - width) / 2, monitor.x, monitor.x + monitor.width - width);
+            const x = clamp(stageX + (buttonWidth - width) / 2, bounds.x, bounds.x + bounds.width - width);
             let y = stageY + buttonHeight + 6;
-            if (y + height > monitor.y + monitor.height)
-                y = Math.max(monitor.y, stageY - height - 6);
+            if (y + height > bounds.y + bounds.height)
+                y = Math.max(bounds.y, stageY - height - 6);
             this._tooltip.set_position(x, y);
         }
         this._tooltip.ease({

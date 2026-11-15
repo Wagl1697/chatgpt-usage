@@ -6,7 +6,7 @@
     "42",
     "46"
   ],
-  "version": 13,
+  "version": 14,
   "settings-schema": "org.gnome.shell.extensions.chatgpt-usage",
   "gettext-domain": "chatgpt-usage@wlopez.local",
   "session-modes": [
